@@ -40,6 +40,17 @@ local jira = require("jira")
 --   end
 -- end
 
+local type_mapping = {
+  Epic = "",
+  Bug = "",
+  Spike = "",
+  Story = "",
+  Task = "",
+  Subtask = "",
+  Project = "",
+  _ = "", -- unknown 
+}
+
 local function live_search(opts)
   opts = opts or {}
   -- opts.entry_maker = vim.F.if_nil(opts.entry_maker, gen_issue_display(opts))
@@ -47,13 +58,16 @@ local function live_search(opts)
   local displayer = entry_display.create {
     separator = " ",
     items = {
+      { width = 1 },
       { width = 10 },
       { width = 20 },
       { remaining = true },
     },
   }
   local make_display = function(entry)
+    local issuetype = entry.value.issuetype:gsub("-", "")
     return displayer {
+      type_mapping[issuetype] or type_mapping["_"],
       { entry.key, "TelescopeResultsIdentifier" },
       entry.creator,
       entry.summary
