@@ -26,15 +26,49 @@ local function make_request(method, endpoint, opts)
   return handle_response(response)
 end
 
+local function escape_string(str)
+  return string.gsub(str, "\"", "\\\"")
+end
+
 local function construct_jql(opts)
   opts = opts or {}
-  local jql = ""
 
-  if opts.text then
-    jql = jql .. "text ~ " .. string.gsub(opts.text, "\"", "\\\"")
+  if opts.jql ~= nil then
+    return opts.jql
   end
 
-  return jql
+  local frag = {}
+
+  if opts.text ~= "" then
+    table.insert(frag, "text ~ \"" .. escape_string(opts.text) .. "\"")
+  end
+
+  for _, key in ipairs({'project','assignee','reporter','creator','watcher','type'}) do
+    if opts[key] then
+      local value = opts[key]
+      -- Check if there's multiple values 
+      -- multiple -> IN search
+      -- single -> IS search
+      -- Split value by comma to allow for multiple values being passed
+
+      local args = {
+        count = 0,
+        items = {}
+      }
+      for i in string.gmatch(value, '([^,]+)') do
+        table.insert(args.items, i)
+        args.count = args.count + 1
+      end
+
+      if args.count > 1 then
+        table.insert(frag, key .. " in (" .. table.concat(args.items, ",") .. ")")
+      else
+        table.insert(frag, key .. " = \"" .. escape_string(value) .. "\"")
+      end
+    end
+  end
+
+  return table.concat(frag, " AND ")
 end
 
 M.projects = function (search_phrase)
@@ -56,21 +90,23 @@ M.projects = function (search_phrase)
       name = v.name
     })
   end
-  return entries
+
+  return {
+    items = entries,
+    maxResults = res.data.maxResults,
+    startAt = res.data.startAt
+  }
 end
 
 M.search = function (search_phrase, opts)
   -- Validate config
-  if search_phrase == "" then
-    return {}
-  end
 
-
-  local jql = construct_jql {
+  local jql = construct_jql(vim.tbl_extend("keep", {
     text = search_phrase
-  }
-  -- Paginate?
+  }, opts))
+
   local endpoint = M._config.base_url .. "search"
+  -- Paginate?
   local payload = {
     jql = jql,
     startAt = 0,
@@ -91,6 +127,13 @@ M.search = function (search_phrase, opts)
     body = vim.fn.json_encode(payload)
   })
   -- Validate success of request
+  print(vim.inspect(res))
+  if res.status ~= 200 then
+    vim.notify.notify(res.data.errorMessages)
+    return {
+      items = {}
+    }
+  end
 
   -- Format to table
   local entries = {}
@@ -109,7 +152,12 @@ M.search = function (search_phrase, opts)
       status = f.status ~= vim.NIL and f.status.name
     })
   end
-  return entries
+
+  return {
+    items = entries,
+    maxResults = res.data.maxResults,
+    startAt = res.data.startAt
+  }
 end
 
 M.setup = function(config)

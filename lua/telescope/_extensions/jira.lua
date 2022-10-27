@@ -76,7 +76,7 @@ local function projects(opts)
     debounce = 250,
     finder = finders.new_dynamic {
       fn = function (input)
-        return jira.projects(input)
+        return jira.projects(input).items
       end,
       entry_maker = function (entry)
         return {
@@ -121,7 +121,7 @@ local function live_search(opts)
     debounce = 250,
     finder = finders.new_dynamic {
       fn = function (input)
-        return jira.search(input, opts)
+        return jira.search(input, opts).items
       end,
       entry_maker = function (entry)
         return {
