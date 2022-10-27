@@ -1,23 +1,29 @@
-local post = require'plenary.curl'.post
-
+local curl = require'plenary.curl'
 
 local M = {}
 
-local function make_request(endpoint, payload)
-  local response = post(
-    endpoint,
-    {
-      auth = M._config.username .. ":" .. M._config.token,
-      body = vim.fn.json_encode(payload),
-      headers = {
-        content_type = "application/json",
-      },
-    }
-  )
+local function handle_response(response)
   return {
     data = vim.fn.json_decode(response.body),
     status = response.status,
   }
+end
+
+local function make_request(method, endpoint, opts)
+  opts = opts or {}
+  local request_opts = vim.tbl_deep_extend("force", {
+    auth = M._config.username .. ":" .. M._config.token,
+    headers = {
+      content_type = "application/json",
+    },
+  }, opts)
+
+  local response = curl[method](
+    endpoint,
+    request_opts
+  )
+
+  return handle_response(response)
 end
 
 local function construct_jql(opts)
@@ -29,6 +35,28 @@ local function construct_jql(opts)
   end
 
   return jql
+end
+
+M.projects = function (search_phrase)
+  local res
+  if search_phrase == "" then
+    local endpoint = M._config.base_url .. "project"
+    res = make_request("get", endpoint)
+  else
+    local endpoint = M._config.base_url .. "projects/picker"
+    res = make_request("get", endpoint, {
+      query = { query = search_phrase }
+    })
+  end
+
+  local entries = {}
+  for _, v in pairs(res.data) do
+    table.insert(entries, {
+      key = v.key,
+      name = v.name
+    })
+  end
+  return entries
 end
 
 M.search = function (search_phrase, opts)
@@ -59,12 +87,13 @@ M.search = function (search_phrase, opts)
     }
   }
 
-  local res = make_request(endpoint, payload)
+  local res = make_request("post", endpoint, {
+    body = vim.fn.json_encode(payload)
+  })
   -- Validate success of request
 
   -- Format to table
   local entries = {}
-  local count = 0
   for _, v in pairs(res.data.issues) do
     local f = v.fields
     table.insert(entries, {
@@ -73,13 +102,12 @@ M.search = function (search_phrase, opts)
       summary = f.summary,
       created = f.created,
       assignee = f.assignee ~= vim.NIL and f.assignee.displayName,
-      creator = f.creator ~= vim.NIL and  f.creator.displayName,
-      reporter = f.reporter ~= vim.NIL and  f.reporter.displayName,
-      priority = f.priority ~= vim.NIL and  f.priority.name,
-      issuetype = f.issuetype ~= vim.NIL and  f.issuetype.name,
-      status = f.status ~= vim.NIL and  f.status.name
+      creator = f.creator ~= vim.NIL and f.creator.displayName,
+      reporter = f.reporter ~= vim.NIL and f.reporter.displayName,
+      priority = f.priority ~= vim.NIL and f.priority.name,
+      issuetype = f.issuetype ~= vim.NIL and f.issuetype.name,
+      status = f.status ~= vim.NIL and f.status.name
     })
-    count = count + 1
   end
   return entries
 end

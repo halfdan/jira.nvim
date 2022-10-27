@@ -51,6 +51,48 @@ local type_mapping = {
   _ = "", -- unknown 
 }
 
+local function projects(opts)
+  opts = opts or {}
+
+
+  local displayer = entry_display.create {
+    separator = " ",
+    items = {
+      { width = 1 },
+      { width = 10 },
+      { remaining = true },
+    },
+  }
+  local make_display = function(entry)
+    return displayer {
+      type_mapping["Project"],
+      { entry.key, "TelescopeResultsIdentifier" },
+      entry.name,
+    }
+  end
+
+  pickers.new(opts, {
+    prompt_title = "Projects",
+    debounce = 250,
+    finder = finders.new_dynamic {
+      fn = function (input)
+        return jira.projects(input)
+      end,
+      entry_maker = function (entry)
+        return {
+          value = entry,
+          display = make_display,
+          ordinal = entry.key,
+          key = entry.key,
+          name = entry.name
+        }
+      end,
+    },
+    -- TODO: Build better sorter that takes recency into account
+    sorter = sorters.empty(),
+  }):find()
+end
+
 local function live_search(opts)
   opts = opts or {}
   -- opts.entry_maker = vim.F.if_nil(opts.entry_maker, gen_issue_display(opts))
@@ -92,7 +134,8 @@ local function live_search(opts)
         }
       end,
     },
-    sorter = sorters.highlighter_only(),
+    -- TODO: Build better sorter that takes recency into account
+    sorter = sorters.empty(),
   }):find()
 end
 
@@ -101,6 +144,7 @@ return require("telescope").register_extension {
   --   -- access extension config and user config
   -- end,
   exports = {
-    live_search = live_search
+    live_search = live_search,
+    projects = projects,
   },
 }
