@@ -1,0 +1,4 @@
+---@class TelescopeJiraConfig
+---@field url_open_command string
+---@field url_open_plugin string
+---@field issuetypes table

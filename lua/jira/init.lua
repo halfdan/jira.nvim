@@ -19,7 +19,7 @@ local function make_request(method, endpoint, opts)
   }, opts)
 
   local response = curl[method](
-    endpoint,
+    M._config.base_url .. "/rest/api/2/" .. endpoint,
     request_opts
   )
 
@@ -71,13 +71,17 @@ local function construct_jql(opts)
   return table.concat(frag, " AND ")
 end
 
+M.get_browse_url =function (key)
+  return M._config.base_url .. "/browse/" .. key
+end
+
 M.projects = function (search_phrase)
   local res
   if search_phrase == "" then
-    local endpoint = M._config.base_url .. "project"
+    local endpoint = "project"
     res = make_request("get", endpoint)
   else
-    local endpoint = M._config.base_url .. "projects/picker"
+    local endpoint = "projects/picker"
     res = make_request("get", endpoint, {
       query = { query = search_phrase }
     })
@@ -105,7 +109,7 @@ M.search = function (search_phrase, opts)
     text = search_phrase
   }, opts))
 
-  local endpoint = M._config.base_url .. "search"
+  local endpoint = "search"
   -- Paginate?
   local payload = {
     jql = jql,
@@ -127,7 +131,6 @@ M.search = function (search_phrase, opts)
     body = vim.fn.json_encode(payload)
   })
   -- Validate success of request
-  print(vim.inspect(res))
   if res.status ~= 200 then
     vim.notify.notify(res.data.errorMessages)
     return {

@@ -1,59 +1,65 @@
+local has_telescope = pcall(require, "telescope")
+
+if not has_telescope then
+  error "This plugin requires telescope.nvim (https://github.com/nvim-telescope/telescope.nvim)"
+end
+
 local pickers = require("telescope.pickers")
 local finders = require("telescope.finders")
-local actions = require("telescope.actions")
-local debounce = require("telescope.debounce")
 local sorters = require("telescope.sorters")
+local actions = require("telescope.actions")
 
 local entry_display = require("telescope.pickers.entry_display")
-local make_entry = require("telescope.make_entry")
 local jira = require("jira")
+local log = require("jira.log")
+local smart_url_opener =
+  require("telescope._extensions.jira.actions").smart_url_opener
 
--- TODO: Figure out why this doesn't work
--- local function gen_issue_display(opts)
---   opts = opts or {}
---
---   local displayer = entry_display.create {
---     separator = " ",
---     items = {
---       { width = 10 },
---       { width = 20 },
---       { remaining = true },
---     },
---   }
---   local make_display = function(entry)
---     return displayer {
---       { entry.issue, "TelescopeResultsIdentifier" },
---       entry.assignee,
---       entry.description
---     }
---   end
---
---   return function(entry)
---     return make_entry.set_default_entry_mt({
---       value = entry,
---       display = make_display,
---       ordinal = entry[1],
---       issue = entry[1],
---       assignee = entry[2],
---       description = entry[3]
---     }, opts)
---   end
--- end
-
-local type_mapping = {
-  Epic = "",
-  Bug = "",
-  Spike = "",
-  Story = "",
-  Task = "",
-  Subtask = "",
-  Project = "",
-  _ = "", -- unknown 
+---@type TelescopeJiraConfig
+local config = {
+  url_open_command = "open",
+  url_open_plugin = nil,
+  issuetypes = {
+    Epic = {
+      icon = "",
+    },
+    Bug = {
+      icon = "",
+    },
+    Spike = {
+      icon = "",
+    },
+    Story = {
+      icon = "",
+    },
+    Task = {
+      icon = "",
+    },
+    Subtask = {
+      icon = "",
+    },
+    Project= {
+      icon = "",
+    },
+    _ = {
+      icon = "", -- unknown 
+    },
+  }
 }
+
+local function get_icon(name)
+  local issuetypes = config.issuetypes
+
+  if issuetypes[name] == nil then
+    log.fmt_debug("%s is not a known issue type", name)
+    return issuetypes["_"].icon
+  else
+    return issuetypes[name].icon
+  end
+end
 
 local function projects(opts)
   opts = opts or {}
-
 
   local displayer = entry_display.create {
     separator = " ",
@@ -65,7 +71,7 @@ local function projects(opts)
   }
   local make_display = function(entry)
     return displayer {
-      type_mapping["Project"],
+      get_icon("Project"),
       { entry.key, "TelescopeResultsIdentifier" },
       entry.name,
     }
@@ -90,6 +96,10 @@ local function projects(opts)
     },
     -- TODO: Build better sorter that takes recency into account
     sorter = sorters.empty(),
+    attach_mappings = function()
+      actions.select_default:replace(smart_url_opener(config))
+      return true
+    end,
   }):find()
 end
 
@@ -109,7 +119,7 @@ local function live_search(opts)
   local make_display = function(entry)
     local issuetype = entry.value.issuetype:gsub("-", "")
     return displayer {
-      type_mapping[issuetype] or type_mapping["_"],
+      get_icon(issuetype),
       { entry.key, "TelescopeResultsIdentifier" },
       entry.creator,
       entry.summary
@@ -136,13 +146,17 @@ local function live_search(opts)
     },
     -- TODO: Build better sorter that takes recency into account
     sorter = sorters.empty(),
+    attach_mappings = function()
+      actions.select_default:replace(smart_url_opener(config))
+      return true
+    end,
   }):find()
 end
 
 return require("telescope").register_extension {
-  -- setup = function(ext_config, config)
-  --   -- access extension config and user config
-  -- end,
+  setup = function(ext_config)
+    config = vim.tbl_deep_extend("force", config, ext_config)
+  end,
   exports = {
     live_search = live_search,
     projects = projects,
